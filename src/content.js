@@ -1,13 +1,12 @@
 (() => {
   'use strict';
 
-  const Shared = globalThis.FrameColorShared;
-  if (!Shared || !Shared.claimRuntimeGuard('__frameColorContentGuard__')) {
+  const Shared = globalThis.TitleBarThemeShared;
+  if (!Shared || !Shared.claimRuntimeGuard('__titleBarThemeContentGuard__')) {
     return;
   }
 
-  const LOCAL_CACHE_KEY = '__crd_frame_color_cache__';
-  const LEGACY_CACHE_KEYS = ['__crd_pwa_frame_color_v3__'];
+  const LOCAL_CACHE_KEY = '__crd_title_bar_color_cache__';
 
   const LIGHT_COLOR = '#fafafa'; // rgb(250, 250, 250)
   const DARK_COLOR  = '#212121'; // rgb(33, 33, 33)
@@ -21,15 +20,6 @@
       const direct = window.localStorage.getItem(LOCAL_CACHE_KEY);
       if (Shared.isValidHexColor(direct)) {
         return direct.toLowerCase();
-      }
-      for (const legacyKey of LEGACY_CACHE_KEYS) {
-        const legacy = window.localStorage.getItem(legacyKey);
-        if (Shared.isValidHexColor(legacy)) {
-          const normalized = legacy.toLowerCase();
-          window.localStorage.setItem(LOCAL_CACHE_KEY, normalized);
-          window.localStorage.removeItem(legacyKey);
-          return normalized;
-        }
       }
     } catch (_) {}
     return null;

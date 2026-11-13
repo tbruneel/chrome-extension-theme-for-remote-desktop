@@ -1589,68 +1589,40 @@ body.vscode-dark code.language-json .hljs-comment {
 
 </head>
 <body>
-<h1 id="title-bar-theme-for-chrome-remote-desktop-chrome-extension-theme-for-remote-desktop">Title Bar Theme for Chrome Remote Desktop (<code>chrome-extension-theme-for-remote-desktop</code>)</h1>
-<p>A zero-configuration Manifest V3 Chrome extension that automatically synchronizes the window frame (title bar) and launch splash color of the <strong>Google Chrome Remote Desktop</strong> Web App (<code>https://remotedesktop.google.com/</code>).</p>
-<hr>
-<h2 id="background">Background</h2>
-<p>By default, <code>https://remotedesktop.google.com/</code> omits <code>&lt;meta name=&quot;theme-color&quot;&gt;</code> from its HTML <code>&lt;head&gt;</code> and omits <code>theme_color</code> from <code>/_/RemotingUi/manifest.json</code>, causing Chrome to render the standalone PWA window with an unmatched default title bar.</p>
-<p>This extension automatically detects Chrome Remote Desktop's active Light/Dark theme (<code>body.afF7cb</code>, <code>body.fv4cze</code>, <code>--page-bg-color</code>, and <code>localStorage['dark-mode$*']</code>) as well as active modal dialog scrims (<code>.llhEMd.iWO5td</code>), keeping <code>&lt;meta name=&quot;theme-color&quot;&gt;</code> and the manifest <code>theme_color</code> / <code>background_color</code> synchronized in real time:</p>
-<table>
-<thead>
-<tr>
-<th style="text-align:left">Theme</th>
-<th style="text-align:left">Base Header Color</th>
-<th style="text-align:left">Dialog Open (<code>50%</code> Scrim)</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td style="text-align:left"><strong>Light</strong></td>
-<td style="text-align:left"><code>#fafafa</code> (<code>rgb(250, 250, 250)</code>)</td>
-<td style="text-align:left"><code>#7d7d7d</code> (<code>rgb(125, 125, 125)</code>)</td>
-</tr>
-<tr>
-<td style="text-align:left"><strong>Dark</strong></td>
-<td style="text-align:left"><code>#212121</code> (<code>rgb(33, 33, 33)</code>)</td>
-<td style="text-align:left"><code>#111111</code> (<code>rgb(17, 17, 17)</code>)</td>
-</tr>
-</tbody>
-</table>
-<hr>
-<h2 id="repository-structure">Repository Structure</h2>
-<pre class="hljs"><code class="language-text"><div>chrome-extension-theme-for-remote-desktop/
-├── .agents/
-│   └── rules/
-│       └── rules-git.md            # Git commit identity rules
-├── icons/
-│   ├── icon16.png                  # Extension toolbar / management icons
-│   ├── icon48.png
-│   └── icon128.png                 # Chrome Web Store listing icon
-├── store/
-│   └── screenshot-1280x800.png     # Chrome Web Store listing screenshot (24-bit PNG)
-├── src/
-│   ├── background.js               # Manifest redirect rule &amp; live tab re-injection on reload
-│   ├── content.js                  # Top-frame theme + dialog scrim observer &amp; &lt;meta&gt; lock
-│   └── shared.js                   # Shared constants, hex validation, color blending &amp; DOM helpers
-├── build.ps1                       # Packages CWS-ready .zip bundle into dist\ (forward-slash entries)
-├── manifest.json                   # Chrome Extension Manifest V3
-├── privacy.md                      # Chrome Web Store privacy policy
-├── readme.md                       # Documentation (Markdown source)
-└── readme.md.html                  # Documentation (Standalone HTML)
-</div></code></pre>
-<hr>
-<h2 id="packaging--deployment">Packaging &amp; Deployment</h2>
-<h3 id="chrome-web-store-packaging-zip">Chrome Web Store Packaging (<code>.zip</code>)</h3>
-<p>Run <code>.\build.ps1</code> to produce <code>dist\chrome-extension-theme-for-remote-desktop-v&lt;version&gt;.zip</code> with <code>manifest.json</code> at the root and forward-slash (<code>/</code>) entry paths ready for upload in the Chrome Web Store Developer Dashboard.</p>
-<h3 id="automated-provisioning-powershell-software-installer">Automated Provisioning (<code>powershell-software-installer</code>)</h3>
-<p>Chrome Web Store Extension ID: <code>goeedkphpabkkmajcmngohomgmdodgaf</code> (configured in <code>powershell-software-installer\manifest.psd1</code> under <code>winget_google_chrome_remote_desktop</code>), so <a href="../powershell-software-installer/readme.md"><code>winget_google_chrome_remote_desktop.ps1</code></a> installs the Remote Desktop Host MSI, Chrome PWA, official Chrome Remote Desktop extension, and this extension automatically via Chrome Enterprise Policy (<code>HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionSettings</code>, mode <code>normal_installed</code>).</p>
-<h3 id="local-development-unpacked-extension">Local Development (Unpacked Extension)</h3>
+<h1 id="title-bar-theme-for-chrome-remote-desktop">Title Bar Theme for Chrome Remote Desktop</h1>
+<p>A lightweight, zero-configuration Chrome extension that matches the window title bar and startup screen of the <strong>Chrome Remote Desktop</strong> desktop app in Chrome to your active Light or Dark theme.</p>
+<h2 id="what-is-this-project">What Is This Project?</h2>
+<p>When you install and run <a href="https://remotedesktop.google.com/">Chrome Remote Desktop</a> as a standalone Chrome app on Windows, it opens in its own dedicated window with a native desktop title bar across the top. This extension automatically keeps that window title bar and the app's startup screen synchronized with your active Light or Dark theme.</p>
+<h2 id="why-does-it-exist">Why Does It Exist?</h2>
+<p>By default, Chrome Remote Desktop does not provide a title bar color to Chrome at all, leaving the installed app window with an unthemed default title bar that clashes with Dark mode, Light mode, and dimmed pop-up dialogs (such as PIN entry, host setup, or settings).</p>
+<p>This extension solves that automatically with zero settings to manage:</p>
+<ul>
+<li>Switches the window title bar seamlessly between Light and Dark modes to match the Chrome Remote Desktop interface.</li>
+<li>Dims smoothly in real time whenever a pop-up dialog opens and restores cleanly when dismissed.</li>
+<li>Remembers your active theme locally so launching the app opens with a matching startup screen instead of flashing an unthemed title bar.</li>
+</ul>
+<div class="markdown-alert markdown-alert-note"><p class="markdown-alert-title"><svg class="octicon octicon-info mr-2" viewBox="0 0 16 16" version="1.1" width="16" height="16" aria-hidden="true"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13ZM6.5 7.75A.75.75 0 0 1 7.25 7h1a.75.75 0 0 1 .75.75v2.75h.25a.75.75 0 0 1 0 1.5h-2a.75.75 0 0 1 0-1.5h.25v-2h-.25a.75.75 0 0 1-.75-.75ZM8 6a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"></path></svg>Note</p><p>Window title bar coloring applies to <strong>standalone Chrome app windows</strong> (created via Chrome's <strong>menu (<code>⋮</code>) → Cast, save, and share → Install page as app…</strong>). Regular Chrome browser tabs use Chrome's normal tab strip and are unaffected.</p>
+</div>
+<h2 id="installation">Installation</h2>
+<h3 id="option-1-chrome-web-store-recommended">Option 1: Chrome Web Store (Recommended)</h3>
 <ol>
-<li>Open <code>chrome://extensions/</code> in Google Chrome.</li>
-<li>Enable <strong>Developer mode</strong> (top-right toggle).</li>
-<li>Click <strong>Load unpacked</strong> and select <code>D:\Development\chrome-extension-theme-for-remote-desktop</code> (or click <strong>Reload (<code>↻</code>)</strong> if already loaded).</li>
-<li>Open the <strong>Chrome Remote Desktop</strong> web app (<code>https://remotedesktop.google.com/access/</code>) — the window frame automatically matches your active Light/Dark theme (<code>#fafafa</code> or <code>#212121</code>) and dims seamlessly when modal dialogs open.</li>
+<li>Open the extension listing on the Chrome Web Store: <a href="https://chromewebstore.google.com/detail/goeedkphpabkkmajcmngohomgmdodgaf">Title Bar Theme for Chrome Remote Desktop</a>.</li>
+<li>Click <strong>Add to Chrome</strong>.</li>
+<li>Open the Chrome Remote Desktop app—your title bar updates automatically with no further setup.</li>
 </ol>
+<h3 id="option-2-chrome-developer-mode-local-setup">Option 2: Chrome Developer Mode (Local Setup)</h3>
+<ol>
+<li>Clone or download this repository to a folder on your computer.</li>
+<li>Open Google Chrome and go to <code>chrome://extensions/</code>.</li>
+<li>Turn on <strong>Developer mode</strong> using the toggle in the top-right corner.</li>
+<li>Click <strong>Load unpacked</strong> in the top-left and select the root folder of this repository (the folder containing <code>manifest.json</code>).</li>
+<li>Open <strong>Chrome Remote Desktop</strong> (<code>https://remotedesktop.google.com/access/</code>) in its standalone Chrome app window.</li>
+</ol>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li><a href="./docs/technical.md"><strong>Technical Documentation</strong></a> — Architecture, implementation details, and design rationale.</li>
+<li><a href="./docs/privacy.md"><strong>Privacy Policy</strong></a> — Privacy details (zero data collection; all theme detection runs locally in your browser).</li>
+</ul>
 
 <script>
 (function () {

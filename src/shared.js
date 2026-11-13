@@ -1,11 +1,11 @@
 (() => {
   'use strict';
 
-  if (globalThis.FrameColorShared) {
+  if (globalThis.TitleBarThemeShared) {
     return;
   }
 
-  const COLOR_KEY = 'frameColor';
+  const COLOR_KEY = 'titleBarColor';
   const DEFAULT_COLOR = '#fafafa';
   const RULE_ID = 1;
   const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -178,7 +178,7 @@
     return rgbToHex(r, g, b);
   }
 
-  globalThis.FrameColorShared = Object.freeze({
+  globalThis.TitleBarThemeShared = Object.freeze({
     COLOR_KEY,
     DEFAULT_COLOR,
     RULE_ID,

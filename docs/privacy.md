@@ -6,7 +6,7 @@
 
 ## Overview
 
-**Title Bar Theme for Chrome Remote Desktop** is designed strictly to synchronize the browser window frame (title bar) and launch splash color with the active theme of the Chrome Remote Desktop web application.
+**Title Bar Theme for Chrome Remote Desktop** is designed strictly to synchronize the browser window title bar and launch splash color with the active theme of the Chrome Remote Desktop web application.
 
 ## Data Collection & Usage
 

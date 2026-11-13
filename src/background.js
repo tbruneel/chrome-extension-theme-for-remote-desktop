@@ -2,7 +2,7 @@
 
 importScripts('./shared.js');
 
-const Shared = globalThis.FrameColorShared;
+const Shared = globalThis.TitleBarThemeShared;
 
 const APP_CONFIG = {
   tabUrlPattern: 'https://remotedesktop.google.com/*',
@@ -96,9 +96,6 @@ function reinjectOpenTabs() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.remove('frameMode', () => {
-    void chrome.runtime.lastError;
-  });
   syncRuleFromStorage();
   reinjectOpenTabs();
 });

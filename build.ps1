@@ -71,8 +71,8 @@ if ($manifest.content_scripts) {
     }
 }
 
-# Also include any additional runtime assets inside src\ or icons\
-foreach ($subDirName in @("icons", "src")) {
+# Also include any additional runtime assets inside src\ (icons referenced in manifest.json are already collected above)
+foreach ($subDirName in @("src")) {
     $subDirPath = Join-Path $repoRoot $subDirName
     if (Test-Path -LiteralPath $subDirPath -PathType Container) {
         Get-ChildItem -LiteralPath $subDirPath -File -Recurse | ForEach-Object {
