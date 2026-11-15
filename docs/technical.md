@@ -21,9 +21,6 @@ In `https://remotedesktop.google.com/`, three platform behaviors cause an unthem
 
 ```text
 chrome-extension-theme-for-remote-desktop/
-├── .agents/
-│   └── rules/
-│       └── rules-git.md            # Git commit identity rules
 ├── assets/
 │   ├── icon16.png                  # Extension icons
 │   ├── icon48.png
@@ -31,17 +28,14 @@ chrome-extension-theme-for-remote-desktop/
 │   └── screenshot-1280x800.png     # Chrome Web Store listing screenshot (excluded from .zip)
 ├── docs/
 │   ├── privacy.md                  # Privacy policy (Markdown)
-│   ├── privacy.md.html             # Privacy policy (Standalone HTML)
-│   ├── technical.md                # Technical documentation (Markdown)
-│   └── technical.md.html           # Technical documentation (Standalone HTML)
-├── src/
+│   └── technical.md                # Technical documentation (Markdown)
+├── source/
 │   ├── background.js               # MV3 service worker: declarativeNetRequest & tab re-injection
 │   ├── content.js                  # Top-level document observer: theme, dialog scrim & <meta> lock
 │   └── shared.js                   # Shared guards, 1x1 canvas color resolver, alpha blender & DOM helper
-├── build.ps1                       # Packages CWS-ready .zip archive into dist\
+├── build.ps1                       # Packages CWS-ready .zip archive into package\
 ├── manifest.json                   # Extension Manifest V3 (kept at root for Load unpacked)
-├── readme.md                       # Non-technical project overview (Markdown)
-└── readme.md.html                  # Non-technical project overview (Standalone HTML)
+└── readme.md                       # Non-technical project overview (Markdown)
 ```
 
 Unlike the Google Antigravity extension, Chrome Remote Desktop renders its Wiz application directly in the top-level document, so no cross-origin iframe observer script is required.
@@ -63,9 +57,9 @@ flowchart LR
 
 ## 3. Component Implementation & Design Rationale
 
-### 3.1 Shared Color & DOM Utilities ([`src/shared.js`](../src/shared.js))
+### 3.1 Shared Color & DOM Utilities ([`source/shared.js`](../source/shared.js))
 
-Shared between [`src/content.js`](../src/content.js) and [`src/background.js`](../src/background.js) (loaded via `importScripts('./shared.js')`):
+Shared between [`source/content.js`](../source/content.js) and [`source/background.js`](../source/background.js) (loaded via `importScripts('./shared.js')`):
 
 - **Idempotent Runtime Guards & Orphan Teardown (`claimRuntimeGuard`, `isContextValid`):**
   - `claimRuntimeGuard(flagName)` records `chrome.runtime.id` on `globalThis[flagName]`. Re-injections during the same runtime no-op cleanly, while stale scripts left over after an extension update detect `isContextValid() === false` and invoke `teardown()` to disconnect `MutationObserver` and remove event listeners.
@@ -79,7 +73,7 @@ $$C_{\text{out}} = \text{round}\!\left(\alpha \cdot C_{\text{overlay}} + (1 - \a
 - **Non-Looping `<meta>` Enforcement (`applyThemeColorMeta`):**
   - Updates the existing `<meta name="theme-color">` in place (or creates one in `<head>`/`<html>`), removes any `media` attribute, prunes duplicates, and returns immediately when already synchronized so DOM edits do not re-trigger `MutationObserver` loops.
 
-### 3.2 Theme & Modal Scrim Observer ([`src/content.js`](../src/content.js))
+### 3.2 Theme & Modal Scrim Observer ([`source/content.js`](../source/content.js))
 
 Runs on `https://remotedesktop.google.com/*` at `run_at: "document_start"`:
 
@@ -99,7 +93,7 @@ Runs on `https://remotedesktop.google.com/*` at `run_at: "document_start"`:
 - **Live vs. Persisted Color Separation:**
   - `displayColor` (including the 50% dialog scrim when open) updates `<meta name="theme-color">` immediately, while only undimmed `baseColor` is written to `localStorage` and `chrome.storage.sync` (`titleBarColor`). Closing Chrome Remote Desktop with a modal open therefore never writes `#7d7d7d` or `#111111` into the next startup splash screen.
 
-### 3.3 Service Worker & Manifest Redirect ([`src/background.js`](../src/background.js))
+### 3.3 Service Worker & Manifest Redirect ([`source/background.js`](../source/background.js))
 
 Runs as the Manifest V3 extension service worker:
 
@@ -108,7 +102,7 @@ Runs as the Manifest V3 extension service worker:
   - Redirects the manifest fetch to an inline `data:application/manifest+json;charset=utf-8,...` URI preserving Chrome Remote Desktop's PWA identity (`name`, `short_name`, `start_url: "https://remotedesktop.google.com/?entry-point=pwa&lfhs=2"`, `id: "/?entry-point=pwa&lfhs=2"`, `icons`, `display: "standalone"`, `orientation: "any"`) with `background_color` and `theme_color` set dynamically to `titleBarColor`.
   - Because Chrome evaluates the Web App Manifest before any content script runs when launching a standalone PWA window, overriding `/_/RemotingUi/manifest.json` ensures the cold-launch splash screen and window title bar match the active theme.
 - **Zero-Reload Activation (`reinjectOpenTabs`):**
-  - On `chrome.runtime.onInstalled`, queries open `https://remotedesktop.google.com/*` tabs and runs `chrome.scripting.executeScript` (`frameIds: [0]`, files `['src/shared.js', 'src/content.js']`) so updates activate immediately without refreshing existing sessions.
+  - On `chrome.runtime.onInstalled`, queries open `https://remotedesktop.google.com/*` tabs and runs `chrome.scripting.executeScript` (`frameIds: [0]`, files `['source/shared.js', 'source/content.js']`) so updates activate immediately without refreshing existing sessions.
 
 ## 4. Permissions & Security Model
 
@@ -125,7 +119,7 @@ Defined in [`manifest.json`](../manifest.json) under the principle of least priv
 
 ### Extension Packaging ([`build.ps1`](../build.ps1))
 
-Running `.\build.ps1` validates every icon and script referenced in [`manifest.json`](../manifest.json), appends all runtime files under `src/`, and writes `dist\chrome-extension-theme-for-remote-desktop-v<version>.zip` (`7` entries) with normalized forward-slash (`/`) ZIP paths required by the Chrome Web Store upload validator. Non-runtime files (`assets/screenshot-1280x800.png`, `docs/*`, `readme.md*`) are intentionally excluded from the archive.
+Running `.\build.ps1` validates every icon and script referenced in [`manifest.json`](../manifest.json), appends all runtime files under `source/`, and writes `package\chrome-extension-theme-for-remote-desktop-v<version>.zip` (`7` entries) with normalized forward-slash (`/`) ZIP paths required by the Chrome Web Store upload validator. Non-runtime files (`assets/screenshot-1280x800.png`, `docs/*`, `readme.md*`) are intentionally excluded from the archive.
 
 ### Automated Policy Provisioning (`powershell-software-installer`)
 

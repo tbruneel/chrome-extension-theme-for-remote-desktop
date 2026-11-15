@@ -17,7 +17,7 @@
     "https://remotedesktop.google.com/*"
   ],
   "background": {
-    "service_worker": "src/background.js"
+    "service_worker": "source/background.js"
   },
   "content_scripts": [
     {
@@ -25,8 +25,8 @@
         "https://remotedesktop.google.com/*"
       ],
       "js": [
-        "src/shared.js",
-        "src/content.js"
+        "source/shared.js",
+        "source/content.js"
       ],
       "run_at": "document_start"
     }

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Packages this Chrome Extension into a Chrome Web Store uploadable .zip archive under dist\.
+    Packages this Chrome Extension into a Chrome Web Store uploadable .zip archive under package\.
 #>
 [CmdletBinding()]
 param()
@@ -71,8 +71,8 @@ if ($manifest.content_scripts) {
     }
 }
 
-# Also include any additional runtime assets inside src\ (icons referenced in manifest.json are already collected above)
-foreach ($subDirName in @("src")) {
+# Also include any additional runtime assets inside source\ (icons referenced in manifest.json are already collected above)
+foreach ($subDirName in @("source")) {
     $subDirPath = Join-Path $repoRoot $subDirName
     if (Test-Path -LiteralPath $subDirPath -PathType Container) {
         Get-ChildItem -LiteralPath $subDirPath -File -Recurse | ForEach-Object {
@@ -84,13 +84,13 @@ foreach ($subDirName in @("src")) {
     }
 }
 
-$distDir = Join-Path $repoRoot "dist"
-if (-not (Test-Path -LiteralPath $distDir -PathType Container)) {
-    New-Item -Path $distDir -ItemType Directory -Force | Out-Null
+$packageDir = Join-Path $repoRoot "package"
+if (-not (Test-Path -LiteralPath $packageDir -PathType Container)) {
+    New-Item -Path $packageDir -ItemType Directory -Force | Out-Null
 }
 
 $zipName = "$repoName-v$($manifest.version).zip"
-$zipPath = Join-Path $distDir $zipName
+$zipPath = Join-Path $packageDir $zipName
 if (Test-Path -LiteralPath $zipPath -PathType Leaf) {
     Remove-Item -LiteralPath $zipPath -Force
 }

@@ -8,7 +8,7 @@ const APP_CONFIG = {
   tabUrlPattern: 'https://remotedesktop.google.com/*',
   manifestUrlFilter: 'https://remotedesktop.google.com/_/RemotingUi/manifest.json*',
   injectionTargets: [
-    { allFrames: false, files: ['src/shared.js', 'src/content.js'] }
+    { allFrames: false, files: ['source/shared.js', 'source/content.js'] }
   ],
   buildManifest(color) {
     return {
