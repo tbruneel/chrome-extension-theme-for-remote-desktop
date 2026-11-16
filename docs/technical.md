@@ -1,129 +1,110 @@
 # Technical Documentation — Title Bar Theme for Chrome Remote Desktop
 
-This document explains **what** is implemented in `chrome-extension-theme-for-remote-desktop`, **how** theme and modal scrim synchronization work, and **why** each architectural decision was made.
+Architecture, Google Wiz DOM theme and dialog scrim detection, PWA manifest redirection, permission boundaries, and Chrome Web Store packaging across [`manifest.json`](../manifest.json), [`source/shared.js`](../source/shared.js), [`source/content.js`](../source/content.js), [`source/background.js`](../source/background.js), and [`build.ps1`](../build.ps1).
 
-## 1. Problem Statement — Why Chrome Remote Desktop Has an Unmatched Title Bar
-
-On Windows, Chromium paints a standalone Progressive Web App (PWA) window's title bar and launch splash screen from two signals:
-
-- **Cold launch / splash screen:** `theme_color` and `background_color` inside the Web App Manifest (`/_/RemotingUi/manifest.json`) fetched when the PWA starts.
-- **Live window title bar:** `<meta name="theme-color">` in the top-level HTML `<head>`.
-
-In `https://remotedesktop.google.com/`, three platform behaviors cause an unthemed title bar and startup mismatch:
-
-1. **Missing Theme Metadata:** The page omits `<meta name="theme-color">` from `<head>`, and `/_/RemotingUi/manifest.json` omits `theme_color`, leaving Chrome with no theme hint for the window title bar or launch splash.
-2. **Google Wiz Framework Styling & Obfuscated Classes:** Theme polarity is toggled via minified Google Wiz CSS classes on `document.body` (`afF7cb` for Light `#fafafa`, `fv4cze` for Dark `#212121`) and `--page-bg-color`, while modal dialogs (PIN prompts, host setup, settings) render a full-viewport backdrop scrim (`.llhEMd.iWO5td`, `rgba(0, 0, 0, 0.5)` at `z-index: 5000`). Chromium does not dim the native title bar behind page scrims automatically.
-3. **Pre-`<body>` Hydration Race & Launch Flash:** Reading `chrome.storage` asynchronously or waiting until `document.body` hydrates causes a visible flash of an unthemed title bar on startup.
-
-## 2. Architecture & Repository Layout
-
-### Tracked Repository Layout
+## 1. Architecture & Repository Layout
 
 ```text
 chrome-extension-theme-for-remote-desktop/
+├── .gitignore                        # Ignores package/, *.zip, *.crx, *.pem, *.htmd
 ├── assets/
-│   ├── icon16.png                  # Extension icons
+│   ├── icon16.png                    # Toolbar and extension icons
 │   ├── icon48.png
-│   ├── icon128.png                 # Chrome Web Store listing icon
-│   └── screenshot-1280x800.png     # Chrome Web Store listing screenshot (excluded from .zip)
+│   ├── icon128.png                   # Chrome Web Store listing icon
+│   └── screenshot-1280x800.png       # Chrome Web Store & README preview screenshot (excluded from .zip)
 ├── docs/
-│   ├── privacy.md                  # Privacy policy (Markdown)
-│   └── technical.md                # Technical documentation (Markdown)
+│   ├── privacy.md                    # Zero-collection privacy policy
+│   └── technical.md                  # Wiz observer architecture, scrim math & packaging reference
 ├── source/
-│   ├── background.js               # MV3 service worker: declarativeNetRequest & tab re-injection
-│   ├── content.js                  # Top-level document observer: theme, dialog scrim & <meta> lock
-│   └── shared.js                   # Shared guards, 1x1 canvas color resolver, alpha blender & DOM helper
-├── build.ps1                       # Packages CWS-ready .zip archive into package\
-├── manifest.json                   # Extension Manifest V3 (kept at root for Load unpacked)
-└── readme.md                       # Non-technical project overview (Markdown)
+│   ├── background.js                 # MV3 service worker: declarativeNetRequest redirect & tab re-injection
+│   ├── content.js                    # Top-level document observer: theme, dialog scrim & meta lock
+│   └── shared.js                     # Shared guards, 1x1 canvas CSS color resolver, alpha blender & meta helper
+├── build.ps1                         # Validates manifest paths and packages package\<repo>-v<ver>.zip
+├── manifest.json                     # Extension Manifest V3 (kept at root for Load unpacked)
+└── readme.md                         # User-facing overview, preview, installation & companion links
 ```
 
-Unlike the Google Antigravity extension, Chrome Remote Desktop renders its Wiz application directly in the top-level document, so no cross-origin iframe observer script is required.
-
-**Why `manifest.json` stays at the repository root:** Chrome's `chrome://extensions` → **Load unpacked** requires `manifest.json` directly inside the selected folder and forbids `../` parent path traversal in extension URLs. Keeping [`manifest.json`](../manifest.json) at the root allows immediate developer-mode loading straight from the cloned repository without an extra staging step.
-
-### End-to-End Signal Flow
+**Why `manifest.json` stays at the repository root:** Chrome's `chrome://extensions` **Load unpacked** flow requires `manifest.json` directly inside the selected directory and disallows `../` parent path traversal in extension resource URLs. Because Chrome Remote Desktop renders its Wiz application directly inside the top-level document, no cross-origin iframe observer is needed.
 
 ```mermaid
 flowchart LR
-  Start["document_start -> content.js"] -->|"1. Reads cache or dark-mode$* key"| Meta["meta name=theme-color (top-level document)"]
-  DOM["MutationObserver (body classes + .llhEMd.iWO5td scrim)"] -->|"2. Computes baseColor & displayColor"| Calc["shared.js (1x1 canvas + alpha composite)"]
-  Calc -->|"3. Locks title bar color (displayColor)"| Meta
-  Calc -->|"4. Caches baseColor synchronously"| LS["window.localStorage (zero-flash startup)"]
-  Calc -->|"5. Persists baseColor asynchronously"| Sync["chrome.storage.sync (titleBarColor)"]
-  Sync -->|"6. chrome.storage.onChanged / onStartup"| SW["background.js (MV3 Service Worker)"]
-  SW -->|"7. updateDynamicRules (RULE_ID = 1)"| DNR["declarativeNetRequest -> data:application/manifest+json"]
+  Start["document_start -> content.js"] -->|"Reads cache or dark-mode$* key"| Meta["meta[name='theme-color']"]
+  DOM["MutationObserver (body classes + .llhEMd.iWO5td scrim)"] -->|"Computes displayColor & baseColor"| Calc["shared.js (1x1 canvas + alpha composite)"]
+  Calc -->|"Locks live title bar color"| Meta
+  Calc -->|"Caches baseColor synchronously"| LS["window.localStorage (__crd_title_bar_color_cache__)"]
+  Calc -->|"Persists baseColor asynchronously"| Sync["chrome.storage.sync (titleBarColor)"]
+  Sync -->|"onChanged / onStartup"| SW["background.js (MV3 Service Worker)"]
+  SW -->|"updateDynamicRules (RULE_ID = 1)"| DNR["declarativeNetRequest -> data:application/manifest+json"]
 ```
 
-## 3. Component Implementation & Design Rationale
+## 2. Design Constraints & Rationale
+
+On Windows, Chromium drives a standalone PWA window frame and launch screen from two independent signals: `<meta name="theme-color">` in the top-level document `<head>` for the live window title bar, and the Web App Manifest (`theme_color` and `background_color` in `/_/RemotingUi/manifest.json`) evaluated before any page script executes for the cold-launch splash screen.
+
+Three behaviors on `https://remotedesktop.google.com/` leave the PWA frame unmatched out of the box:
+
+1. **Missing Metadata:** The HTML document omits `<meta name="theme-color">`, and `/_/RemotingUi/manifest.json` omits `theme_color`, falling back to Chrome's default frame color.
+2. **Minified Wiz Classes & Modal Scrims:** Theme state switches via minified Google Wiz classes on `document.body` (`afF7cb` Light `#fafafa`, `fv4cze` Dark `#212121`) and `--page-bg-color`, while modal dialogs (PIN prompts, host setup, settings) paint a full-viewport backdrop scrim (`.llhEMd.iWO5td`, `rgba(0, 0, 0, 0.5)`) without dimming the native desktop frame.
+3. **Pre-`<body>` Startup Flash:** Waiting for asynchronous `chrome.storage` reads or body hydration flashes an unthemed title bar before DOM classes settle.
+
+## 3. Core Components & Runtime Coordination
 
 ### 3.1 Shared Color & DOM Utilities ([`source/shared.js`](../source/shared.js))
 
-Shared between [`source/content.js`](../source/content.js) and [`source/background.js`](../source/background.js) (loaded via `importScripts('./shared.js')`):
+Injected before `source/content.js` (`run_at: "document_start"`) and loaded inside the MV3 service worker via `importScripts('./shared.js')`, `source/shared.js` exposes an immutable `globalThis.TitleBarThemeShared` namespace.
 
-- **Idempotent Runtime Guards & Orphan Teardown (`claimRuntimeGuard`, `isContextValid`):**
-  - `claimRuntimeGuard(flagName)` records `chrome.runtime.id` on `globalThis[flagName]`. Re-injections during the same runtime no-op cleanly, while stale scripts left over after an extension update detect `isContextValid() === false` and invoke `teardown()` to disconnect `MutationObserver` and remove event listeners.
-- **CSS Color 4 Rasterization (`resolveOpaqueRgb`, `parseCssColorWithAlpha`):**
-  - Handles `#RRGGBB` and `rgb()`/`rgba()` directly via fast regex matching, with fallback to a lazy `1×1` 2D `<canvas>` (`{ willReadFrequently: true }`) so any arbitrary CSS color value (including CSS custom properties resolved via `getComputedStyle`) is evaluated using Chromium's native color engine.
-- **Alpha Scrim Blending (`blendOverlayOntoBase`):**
-  - Source-over compositing computes the exact opaque `#rrggbb` title bar color matching a translucent dialog scrim over the page header:
+- **Idempotent Guards & Orphan Teardown (`claimRuntimeGuard`, `isContextValid`):** `claimRuntimeGuard(flagName)` stores `chrome.runtime.id` on `globalThis[flagName]`. Re-injections during `chrome.runtime.onInstalled` no-op when the same extension runtime holds the guard, while stale listeners from a previous extension version detect `isContextValid() === false` and call `teardown()` to disconnect observers and listeners cleanly.
+- **CSS Color Resolution & Scrim Blending (`resolveOpaqueRgb`, `parseCssColorWithAlpha`, `blendOverlayOntoBase`):** `#RRGGBB` and `rgb()`/`rgba()` strings parse directly via regex fast paths, while CSS custom properties and CSS Color 4 values fall back to a lazy `1x1` 2D `<canvas>` (`{ willReadFrequently: true }`) resolved by Chromium's color engine. When a translucent dialog scrim is visible, `blendOverlayOntoBase` computes the opaque title bar hex color via source-over compositing:
 
 $$C_{\text{out}} = \text{round}\!\left(\alpha \cdot C_{\text{overlay}} + (1 - \alpha) \cdot C_{\text{base}}\right)$$
 
-- **Non-Looping `<meta>` Enforcement (`applyThemeColorMeta`):**
-  - Updates the existing `<meta name="theme-color">` in place (or creates one in `<head>`/`<html>`), removes any `media` attribute, prunes duplicates, and returns immediately when already synchronized so DOM edits do not re-trigger `MutationObserver` loops.
+- **Non-Looping `<meta>` Synchronization (`applyThemeColorMeta`):** Exits early if a single `<meta name="theme-color">` tag with no `media` attribute already matches `color`; otherwise updates or creates it under `document.head || document.documentElement`, removes any `media` attribute, and deletes duplicate tags to prevent `MutationObserver` loops.
 
-### 3.2 Theme & Modal Scrim Observer ([`source/content.js`](../source/content.js))
+### 3.2 Wiz Theme & Dialog Scrim Observer ([`source/content.js`](../source/content.js))
 
-Runs on `https://remotedesktop.google.com/*` at `run_at: "document_start"`:
+Running at `run_at: "document_start"`, `detectFallbackStorageColor` paints `<meta name="theme-color">` synchronously before `document.body` exists by checking `window.localStorage['__crd_title_bar_color_cache__']`, or scanning Chrome Remote Desktop's own `localStorage['dark-mode$*']` keys on first run (`"true"` -> `#212121`, `"false"` -> `#fafafa`).
 
-- **Zero-Flash Startup Cache (`detectFallbackStorageColor`):**
-  - Runs immediately before `<body>` exists. Reads `window.localStorage['__crd_title_bar_color_cache__']` synchronously to paint `<meta name="theme-color">` on initial startup.
-  - On first run before the cache key is written, scans Chrome Remote Desktop's own `localStorage['dark-mode$*']` preference keys (`"true"` → `#212121`, `"false"` → `#fafafa`), eliminating first-launch dark-mode flashes.
-- **DOM Theme Resolution (`resolveBaseRgbFromDom`):**
-  - Checks Chrome Remote Desktop's Wiz body theme classes (`body.fv4cze` → `#212121`, `body.afF7cb` → `#fafafa`) and falls back to computed `--page-bg-color` on `document.body`. Keeping the `--page-bg-color` fallback ensures theme detection continues working even if Wiz's obfuscated class names change in future web app builds.
-- **Modal Dialog Scrim Detection (`detectActiveOverlay`):**
-  - Watches for visible Google Wiz modal dialog scrims matching `.llhEMd.iWO5td` (skipping `aria-hidden="true"`, `display: none`, `visibility: hidden`, and `pointer-events: none`), parses their computed `backgroundColor` (`rgba(0, 0, 0, 0.5)` fallback), and alpha-blends them onto `baseRgb`:
+Once hydrated, `resolveBaseRgbFromDom` maps `body.fv4cze` (`#212121`) and `body.afF7cb` (`#fafafa`) and falls back to computed `--page-bg-color` on `document.body` so theme detection keeps working across minified class changes. `detectActiveOverlay` inspects visible `.llhEMd.iWO5td` dialog scrims (skipping `aria-hidden="true"`, `display: none`, `visibility: hidden`, and `pointer-events: none`, defaulting to `rgba(0, 0, 0, 0.5)`) and composites them over `baseRgb`:
 
 | Theme | Base Header Color | Dialog Open (`50%` Scrim) |
 | :--- | :--- | :--- |
 | **Light** | `#fafafa` (`rgb(250, 250, 250)`) | `#7d7d7d` (`rgb(125, 125, 125)`) |
 | **Dark** | `#212121` (`rgb(33, 33, 33)`) | `#111111` (`rgb(17, 17, 17)`) |
 
-- **Live vs. Persisted Color Separation:**
-  - `displayColor` (including the 50% dialog scrim when open) updates `<meta name="theme-color">` immediately, while only undimmed `baseColor` is written to `localStorage` and `chrome.storage.sync` (`titleBarColor`). Closing Chrome Remote Desktop with a modal open therefore never writes `#7d7d7d` or `#111111` into the next startup splash screen.
+Live `displayColor` (including the 50% dialog scrim when open) drives `<meta name="theme-color">`, whereas only undimmed `baseColor` writes to `localStorage` and `chrome.storage.sync['titleBarColor']`, preventing dismissed dialogs from tinting the next cold-launch splash screen.
 
 ### 3.3 Service Worker & Manifest Redirect ([`source/background.js`](../source/background.js))
 
-Runs as the Manifest V3 extension service worker:
+`updateManifestRedirectRule` reads `titleBarColor` from `chrome.storage.sync` (default `#fafafa`) and registers `chrome.declarativeNetRequest` dynamic rule `RULE_ID = 1` matching `https://remotedesktop.google.com/_/RemotingUi/manifest.json*` (`resourceTypes: ['other', 'xmlhttprequest', 'sub_frame', 'main_frame']`). The rule redirects the manifest fetch to an inline `data:application/manifest+json;charset=utf-8,...` URI preserving Chrome Remote Desktop's PWA identity (`start_url: "https://remotedesktop.google.com/?entry-point=pwa&lfhs=2"`, `id: "/?entry-point=pwa&lfhs=2"`, `display: "standalone"`, `orientation: "any"`, `icons`) with synchronized `background_color` and `theme_color`. On `chrome.runtime.onInstalled`, `reinjectOpenTabs` injects `source/shared.js` + `source/content.js` into open tabs (`frameIds: [0]`) so updates activate immediately without refreshing existing sessions.
 
-- **Dynamic Manifest Override (`declarativeNetRequest`):**
-  - Reads `titleBarColor` from `chrome.storage.sync` (default `#fafafa`) and installs dynamic rule `RULE_ID = 1` matching `https://remotedesktop.google.com/_/RemotingUi/manifest.json*`.
-  - Redirects the manifest fetch to an inline `data:application/manifest+json;charset=utf-8,...` URI preserving Chrome Remote Desktop's PWA identity (`name`, `short_name`, `start_url: "https://remotedesktop.google.com/?entry-point=pwa&lfhs=2"`, `id: "/?entry-point=pwa&lfhs=2"`, `icons`, `display: "standalone"`, `orientation: "any"`) with `background_color` and `theme_color` set dynamically to `titleBarColor`.
-  - Because Chrome evaluates the Web App Manifest before any content script runs when launching a standalone PWA window, overriding `/_/RemotingUi/manifest.json` ensures the cold-launch splash screen and window title bar match the active theme.
-- **Zero-Reload Activation (`reinjectOpenTabs`):**
-  - On `chrome.runtime.onInstalled`, queries open `https://remotedesktop.google.com/*` tabs and runs `chrome.scripting.executeScript` (`frameIds: [0]`, files `['source/shared.js', 'source/content.js']`) so updates activate immediately without refreshing existing sessions.
+## 4. Storage, Bridge & Permission Reference
 
-## 4. Permissions & Security Model
+| Key / Identifier | Scope / Channel | Format / Value | Role |
+| :--- | :--- | :--- | :--- |
+| `__crd_title_bar_color_cache__` | `window.localStorage` (`remotedesktop.google.com`) | `#rrggbb` | Synchronous zero-flash startup tint before `document.body` hydrates. |
+| `dark-mode$*` | `window.localStorage` (read-only fallback) | `"true"` / `"false"` | First-launch polarity fallback before the extension cache exists. |
+| `titleBarColor` | `chrome.storage.sync` (default `#fafafa`) | `#rrggbb` | Persisted `baseColor` driving service-worker manifest redirects. |
+| `RULE_ID = 1` | `chrome.declarativeNetRequest` | Dynamic redirect rule | Rewrites `/_/RemotingUi/manifest.json*` to inline `data:application/manifest+json`. |
 
-Defined in [`manifest.json`](../manifest.json) under the principle of least privilege:
+Defined in [`manifest.json`](../manifest.json) under least privilege:
 
-| Permission / Host | Purpose | Why Broader Access Is Avoided |
+| Permission / Host | Purpose | Boundary |
 | :--- | :--- | :--- |
-| `storage` | Persists only `titleBarColor` (`#rrggbb`) in `chrome.storage.sync` so `background.js` keeps the manifest redirect rule in sync across restarts. | No user profile, session host list, or browsing history is stored. See [`privacy.md`](./privacy.md). |
-| `declarativeNetRequest` | Installs `RULE_ID = 1` redirecting `/_/RemotingUi/manifest.json*` to a localized `data:application/manifest+json` URI with synchronized colors. | Evaluated natively by Chromium without `webRequest` interception overhead. |
-| `scripting` | Re-injects scripts into already-open Chrome Remote Desktop tabs inside `onInstalled` so updates apply immediately. | Scoped strictly to `https://remotedesktop.google.com/*`; `tabs` permission is unnecessary and omitted. |
-| `https://remotedesktop.google.com/*` | Hosts the top-level document observer (`content.js`) and manifest redirect rule. | Prevents injection on any other domain. |
+| `storage` | Syncs only the 7-character `titleBarColor` (`#rrggbb`) hex string across Chrome sessions. | Zero user profile, host list, or browsing data stored. See [`privacy.md`](./privacy.md). |
+| `declarativeNetRequest` | Redirects `/_/RemotingUi/manifest.json*` to an offline `data:application/manifest+json` manifest with synchronized theme colors. | Native Chromium rule evaluation with no blocking `webRequest` interception. |
+| `scripting` | Re-injects `source/shared.js` and `source/content.js` into open tabs inside `onInstalled`. | Scoped strictly to `https://remotedesktop.google.com/*`; `tabs` permission is omitted. |
+| `https://remotedesktop.google.com/*` | Hosts the top-level Wiz theme/scrim observer and manifest redirect target. | Excludes all other websites and Google domains. |
 
-## 5. Build Packaging & Automated Provisioning
+## 5. Build, Debug & Packaging
 
-### Extension Packaging ([`build.ps1`](../build.ps1))
+```powershell
+# Validate manifest.json entries and output package\chrome-extension-theme-for-remote-desktop-v<version>.zip
+.\build.ps1
 
-Running `.\build.ps1` validates every icon and script referenced in [`manifest.json`](../manifest.json), appends all runtime files under `source/`, and writes `package\chrome-extension-theme-for-remote-desktop-v<version>.zip` (`7` entries) with normalized forward-slash (`/`) ZIP paths required by the Chrome Web Store upload validator. Non-runtime files (`assets/screenshot-1280x800.png`, `docs/*`, `readme.md*`) are intentionally excluded from the archive.
+# Inspect packaged archive entries (7 forward-slash paths expected)
+[System.IO.Compression.ZipFile]::OpenRead((Resolve-Path .\package\chrome-extension-theme-for-remote-desktop-*.zip)).Entries.FullName
+```
 
-### Automated Policy Provisioning (`powershell-software-installer`)
+Running [`build.ps1`](../build.ps1) validates every icon, background worker, and content script in [`manifest.json`](../manifest.json), collects runtime scripts under `source/`, and writes `package\chrome-extension-theme-for-remote-desktop-v<version>.zip` (`7` entries) using forward-slash (`/`) ZIP paths required by the Chrome Web Store upload validator while omitting `assets/screenshot-1280x800.png`, `docs/`, `readme.md`, and `*.htmd`. [`.gitignore`](../.gitignore) excludes `package/`, `*.zip`, `*.crx`, `*.pem`, and `*.htmd` from version control.
 
-Chrome Web Store Extension ID `goeedkphpabkkmajcmngohomgmdodgaf` is configured in the sibling [`powershell-software-installer`](../../powershell-software-installer/readme.md) bundle (`winget_google_chrome_remote_desktop`) alongside the Chrome Remote Desktop Host MSI, Chrome PWA, and official Remoting extension:
-
-- Writes Chrome Enterprise Policy `HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionSettings` for `goeedkphpabkkmajcmngohomgmdodgaf` with `installation_mode = "normal_installed"` and `update_url = "https://clients2.google.com/service/update2/crx"`.
-- **Why this works cleanly on unmanaged machines:** Chromium's `FilterSensitiveExtensionSettings` policy filter permits `normal_installed` on non-domain-joined Windows machines whenever `update_url` points to Chrome Web Store (`clients2.google.com`) and the extension visibility is Public or Unlisted. Using `normal_installed` automatically provisions the extension on fresh machine setups while still allowing end users to disable or uninstall it freely.
+For unmanaged Enterprise policy deployment, sibling repository [powershell-software-installer](https://github.com/tbruneel/powershell-software-installer) provisions Chrome Web Store ID `goeedkphpabkkmajcmngohomgmdodgaf` under `HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionSettings` (`installation_mode = "normal_installed"`, `update_url = "https://clients2.google.com/service/update2/crx"`), which Chromium permits for Public or Unlisted items so end users retain enable/uninstall control.
